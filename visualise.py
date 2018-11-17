@@ -13,7 +13,7 @@ def update(i):
     field = data[i, :, :]
     img.set_data(field)
     #img.set_clim(vmin=field.min(), vmax=field.max())
-    img.set_clim(vmin=-0.05, vmax=0.05)
+    img.set_clim(vmin=-0.025, vmax=0.025)
     return img,
 
 ani = animation.FuncAnimation(fig, update, frames=range(n), interval=1000/60, blit=True)

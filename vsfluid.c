@@ -5,14 +5,14 @@
 
 #define N 1000
 #define SIZE 100
-#define H 0.025
+#define H 0.02
 #define U 1.0
 #define dt (1.0 / 60)
 #define epsilon (H/2)
 #define rho1 1.0
-#define rho2 0.5
+#define rho2 0.2
 #define mu1 0.0025
-#define mu2 0.00125
+#define mu2 0.000625
 
 #define heaviside(x) (0.5 * (1 + tanh(x / (2 * epsilon))))
 #define rho(i, j) (rho1 * heaviside(phi[i][j]) + rho2 * (1 - heaviside(phi[i][j])))
@@ -27,12 +27,6 @@
 #define ddy(f) ((f[i+1][j] - f[i-1][j]) / (2*H))
 #define d2dx2(f) ((f[i][j+1] - 2*f[i][j] + f[i][j-1]) / (H*H))
 #define d2dy2(f) ((f[i+1][j] - 2*f[i][j] + f[i-1][j]) / (H*H))
-
-// One sided differences
-#define ddx_fwd(f) ((f[i][j+(j<SIZE-1)] - f[i][j]) / H)
-#define ddx_back(f) ((f[i][j] - f[i][j-(j>0)]) / H)
-#define ddy_fwd(f) ((f[i+(i<SIZE-1)][j] - f[i][j]) / H)
-#define ddy_back(f) ((f[i][j] - f[i-(i>0)][j]) / H)
 
 // First order upwind
 #define fx(f) (sign(u) * (-phi[i][j-sign(u)] + phi[i][j]) / H)
@@ -101,7 +95,12 @@ int main() {
                 float nu_y = (nu(i+1, j) - nu(i-1, j)) / (2*H);
 
                 // Vorticity transport equation
-                omega_new[i][j] = omega[i][j] + ( -u * fx(omega) - v * fy(omega) + (1 / (rho(i, j) * rho(i, j))) * (rho_x * ddy(p) - rho_y * ddx(p)) + nu(i, j) * (d2dx2(omega) + d2dy2(omega)) + nu_x * fx(omega) + nu_y * fy(omega)) * dt;
+                omega_new[i][j] = omega[i][j] + (
+                    - u * fx(omega) - v * fy(omega)
+                    + (1 / (rho(i, j) * rho(i, j))) * (rho_x * ddy(p) - rho_y * ddx(p))
+                    + nu(i, j) * (d2dx2(omega) + d2dy2(omega))
+                    + nu_x * ddx(omega) + nu_y * ddy(omega)
+                    ) * dt;
                 
                 // Elliptic equation (one iteration)
                 psi_new[i][j] = 0.25 * (psi[i+1][j] + psi[i-1][j] + psi[i][j+1] + psi[i][j-1] + H * H * omega_new[i][j]);
@@ -118,23 +117,31 @@ int main() {
         memcpy(psi, psi_new, sizeof(field));
         memcpy(phi, phi_new, sizeof(field));
         memcpy(p, p_new, sizeof(field));
-
+        
         // Redistancing of level set function
-        for (i = 0; i < SIZE; i++) {
-            for (j = 0; j < SIZE; j++) {
+        int iter;
+        for (iter = 0; iter < 2; iter++) {
+            for (i = 0; i < SIZE; i++) {
+                for (j = 0; j < SIZE; j++) {
 
-                float dx = ddx_back(phi) * ((ddx_back(phi) * sign(phi[i][j])) > 0) + ddx_fwd(phi) * ((ddx_fwd(phi) * sign(phi[i][j])) < 0);
-                float dy = ddy_back(phi) * ((ddy_back(phi) * sign(phi[i][j])) > 0) + ddy_fwd(phi) * ((ddy_fwd(phi) * sign(phi[i][j])) < 0);
-                
-                // Artificial timestep from CFL stability criteria
-                float dtau = H / 2;
+                    int sgn = sign(phi[i][j]);
+                    float dx_plus = (phi[i][j+(j<SIZE-1)] - phi[i][j]) / H;
+                    float dx_minus = (phi[i][j] - phi[i][j-(j>0)]) / H;
+                    float dy_plus = (phi[i+(i<SIZE-1)][j] - phi[i][j]) / H;
+                    float dy_minus = (phi[i][j] - phi[i-(i>0)][j]) / H;
 
-                // One step of redistancing equation
-                phi_new[i][j] = phi[i][j] + sign(phi[i][j]) * (1 - sqrtf(dx * dx + dy * dy)) * dtau;
+                    float dx = dx_minus * (dx_minus * sgn > 0 & dx_plus * sgn > -dx_minus * sgn) + dx_plus * (dx_plus * sgn < 0 | dx_minus * sgn < -dx_plus * sgn);
+                    float dy = dy_minus * (dy_minus * sgn > 0 & dy_plus * sgn > -dy_minus * sgn) + dy_plus * (dy_plus * sgn < 0 | dy_minus * sgn < -dy_plus * sgn);
+                    
+                    // Artificial timestep from CFL stability criteria
+                    float dtau = H / 2;
+
+                    // One step of redistancing equation
+                    phi_new[i][j] = phi[i][j] + sign(phi[i][j]) * (1 - sqrtf(dx * dx + dy * dy)) * dtau;
+                }
             }
+            memcpy(phi, phi_new, sizeof(field));
         }
-
-        memcpy(phi, phi_new, sizeof(field));
         
         // Copy to correct location in output buffer
         memcpy(output + n * SIZE * SIZE, phi, sizeof(field));
