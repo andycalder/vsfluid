@@ -7,20 +7,9 @@
 #define SIZE 100
 #define H 0.02
 #define U 1.0
-#define dt (1.0 / 60)
-#define epsilon (H/2)
-#define rho1 1.0
-#define rho2 0.2
-#define mu1 0.0025
-#define mu2 0.000625
-
-#define heaviside(x) (0.5 * (1 + tanh(x / (2 * epsilon))))
-#define rho(i, j) (rho1 * heaviside(phi[i][j]) + rho2 * (1 - heaviside(phi[i][j])))
-#define mu(i, j) (mu1 * heaviside(phi[i][j]) + mu2 * (1 - heaviside(phi[i][j])))
-#define nu(i, j) (mu(i, j) / rho(i, j))
-
-// Mixed derivative
-#define fxy(f) ((0.25 / (H*H)) * (f[i+1][j+1] + f[i-1][j-1] - f[i+1][j-1] - f[i-1][j+1]))
+#define dt 0.01
+#define nu 0.006
+#define g 0.0
 
 // Central difference derivatives
 #define ddx(f) ((f[i][j+1] - f[i][j-1]) / (2*H))
@@ -43,8 +32,6 @@ int main() {
     field psi_new = {0};
     field phi = {0};
     field phi_new = {0};
-    field p = {0};
-    field p_new = {0};
 
     float *output = malloc(sizeof(field) * N);
     
@@ -69,11 +56,6 @@ int main() {
             omega[SIZE-1][i] = 2.0 * -psi[SIZE-2][i] / (H*H);
             omega[i][0] = 2.0 * -psi[i][1] / (H*H);
             omega[i][SIZE-1] = 2.0 * -psi[i][SIZE-2] / (H*H);
-
-            p[0][i] = p_new[0][i] = p[1][i];
-            p[SIZE-1][i] = p_new[SIZE-1][i] = p[SIZE-2][i];
-            p[i][0] = p_new[i][0] = p[i][1];
-            p[i][SIZE-1] = p_new[i][SIZE-1] = p[i][SIZE-2];
         }
 
         // Advect level set on moving boundary
@@ -88,25 +70,12 @@ int main() {
             for (j = 1; j < SIZE - 1; j++) {
                 float u = ddy(psi);
                 float v = -ddx(psi);
-                
-                float rho_x = (rho(i, j+1) - rho(i, j-1)) / (2*H);
-                float rho_y = (rho(i+1, j) - rho(i-1, j)) / (2*H);
-                float nu_x = (nu(i, j+1) - nu(i, j-1)) / (2*H);
-                float nu_y = (nu(i+1, j) - nu(i-1, j)) / (2*H);
 
                 // Vorticity transport equation
-                omega_new[i][j] = omega[i][j] + (
-                    - u * fx(omega) - v * fy(omega)
-                    + (1 / (rho(i, j) * rho(i, j))) * (rho_x * ddy(p) - rho_y * ddx(p))
-                    + nu(i, j) * (d2dx2(omega) + d2dy2(omega))
-                    + nu_x * ddx(omega) + nu_y * ddy(omega)
-                    ) * dt;
+                omega_new[i][j] = omega[i][j] + (- u * fx(omega) - v * fy(omega) + nu * (d2dx2(omega) + d2dy2(omega))) * dt;
                 
                 // Elliptic equation (one iteration)
                 psi_new[i][j] = 0.25 * (psi[i+1][j] + psi[i-1][j] + psi[i][j+1] + psi[i][j-1] + H * H * omega_new[i][j]);
-
-                // Pressure
-                p_new[i][j] = 0.25 * (p[i+1][j] + p[i-1][j] + p[i][j+1] + p[i][j-1] + 2 * rho(i, j) * H * H * (d2dx2(psi) * d2dy2(psi) - fxy(psi) * fxy(psi)));
 
                 // Advect level set
                 phi_new[i][j] = phi[i][j] + ( -u * fx(phi) -v * fy(phi) ) * dt;
@@ -116,11 +85,10 @@ int main() {
         memcpy(omega, omega_new, sizeof(field));
         memcpy(psi, psi_new, sizeof(field));
         memcpy(phi, phi_new, sizeof(field));
-        memcpy(p, p_new, sizeof(field));
         
         // Redistancing of level set function
         int iter;
-        for (iter = 0; iter < 2; iter++) {
+        for (iter = 0; iter < 3; iter++) {
             for (i = 0; i < SIZE; i++) {
                 for (j = 0; j < SIZE; j++) {
 
@@ -143,7 +111,7 @@ int main() {
             memcpy(phi, phi_new, sizeof(field));
         }
         
-        // Copy to correct location in output buffer
+        // Copy to correct offset in output buffer
         memcpy(output + n * SIZE * SIZE, phi, sizeof(field));
     }
 
