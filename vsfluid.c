@@ -2,11 +2,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <time.h>
 
 #define N 1000
 #define SIZE 100
 #define H 0.02
-#define U 1.0
+#define U 0.0
 #define dt 0.01
 #define nu 0.006
 #define g 0.0
@@ -21,11 +22,17 @@
 #define fx(f) (sign(u) * (-phi[i][j-sign(u)] + phi[i][j]) / H)
 #define fy(f) (sign(v) * (-phi[i-sign(v)][j] + phi[i][j]) / H)
 
+// Second order upwind
+#define fxx(f) ((f[i][j] + f[i][j-2*sign(u)] - 2 * f[i][j-sign(u)]) / (H*H))
+#define fyy(f) ((f[i][j] + f[i-2*sign(u)][j] - 2 * f[i-sign(u)][j]) / (H*H))
+
 #define sign(x) ((x > 0) - (x < 0))
 
 typedef float field[SIZE][SIZE];
 
 int main() {
+    clock_t begin = clock();
+    
     field omega = {0};
     field omega_new = {0};
     field psi = {0};
@@ -40,7 +47,7 @@ int main() {
     // Initialise level set
     for (i = 0; i < SIZE; i++) {
         for (j = 0; j < SIZE; j++) {
-            if (j < 50) {
+            if ((i > 25) && (i < 75) && (j > 25) && (j < 75)) {
                 phi[i][j] = phi_new[i][j] = H;
             } else {
                 phi[i][j] = phi_new[i][j] = -H;
@@ -52,17 +59,10 @@ int main() {
 
         // Set boundaries
         for (i = 1; i < SIZE - 1; i++) {
-            omega[0][i] = 2.0 * -psi[1][i] / (H*H) + 2 * U / H;
+            omega[0][i] = 2.0 * -psi[1][i] / (H*H);
             omega[SIZE-1][i] = 2.0 * -psi[SIZE-2][i] / (H*H);
             omega[i][0] = 2.0 * -psi[i][1] / (H*H);
             omega[i][SIZE-1] = 2.0 * -psi[i][SIZE-2] / (H*H);
-        }
-
-        // Advect level set on moving boundary
-        for (j = 1; j < SIZE-1; j++) {
-            i = 0;
-            float u = U;
-            phi_new[0][j] = phi[0][j] - u * fx(phi) * dt;
         }
 
         // Time step
@@ -88,7 +88,7 @@ int main() {
         
         // Redistancing of level set function
         int iter;
-        for (iter = 0; iter < 3; iter++) {
+        for (iter = 0; iter < 2; iter++) {
             for (i = 0; i < SIZE; i++) {
                 for (j = 0; j < SIZE; j++) {
 
@@ -119,6 +119,11 @@ int main() {
     FILE *file = fopen("./output", "w");
     fwrite(output, sizeof(float), SIZE * SIZE * N, file);
     fclose(file);
+
+    // Print elapsed time
+    clock_t end = clock();
+    double elapsed_time = (double)(end - begin) / CLOCKS_PER_SEC;
+    printf("Done in %f s\n", elapsed_time);
 
     return 0;
 }
