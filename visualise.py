@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 
-data = np.fromfile('./output', dtype=np.float32)
+data = np.fromfile('./output', dtype=np.float64)
 n = int(data.size / (100 * 100))
 data = np.reshape(data, (n, 100, 100))
 
