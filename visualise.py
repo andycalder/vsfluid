@@ -13,10 +13,14 @@ def update(i):
     field = data[i, :, :]
     img.set_data(field)
     #img.set_clim(vmin=field.min(), vmax=field.max())
-    img.set_clim(vmin=-0.06, vmax=0.06)
+    img.set_clim(vmin=-0.02, vmax=0.02)
     return img,
 
 ani = animation.FuncAnimation(fig, update, frames=range(n), interval=1000/60, blit=True)
 
 plt.axis('off')
 plt.show()
+
+# Save animated gif (must have imagemagick installed)
+#fig.subplots_adjust(left=0, bottom=0, right=1, top=1, wspace=None, hspace=None)
+#ani.save('render.gif', writer='imagemagick')

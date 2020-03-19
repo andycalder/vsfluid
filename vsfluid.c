@@ -4,7 +4,7 @@
 #include <math.h>
 #include <time.h>
 
-#define N 1000
+#define N 300
 #define SIZE 100
 #define H 0.02
 #define U 0.0
@@ -22,22 +22,7 @@
 #define fx(f) (sign(u) * (-f[i][j-sign(u)] + f[i][j]) / H)
 #define fy(f) (sign(v) * (-f[i-sign(v)][j] + f[i][j]) / H)
 
-// Second order upwind
-#define fxx(f) ((f[i][j] + f[i][j-2*sign(u)] - 2 * f[i][j-sign(u)]) / (H*H))
-#define fyy(f) ((f[i][j] + f[i-2*sign(u)][j] - 2 * f[i-sign(u)][j]) / (H*H))
-
 #define sign(x) ((x > 0) - (x < 0))
-
-#define EPSILON (1.5 * H)
-double S(double f) {
-    if (f < -EPSILON) {
-        return -1;
-    } else if (f > EPSILON) {
-        return 1;
-    } else {
-        return f / EPSILON + (1 / M_PI) * sin(M_PI * f / EPSILON);
-    }
-}
 
 typedef double field[SIZE][SIZE];
 
@@ -58,11 +43,7 @@ int main() {
     // Initialise level set
     for (i = 0; i < SIZE; i++) {
         for (j = 0; j < SIZE; j++) {
-            if (sqrtf((i-50)*(i-50)+(j-50)*(j-50))<10) {
-                phi[i][j] = phi_new[i][j] = H/2;
-            } else {
-                phi[i][j] = phi_new[i][j] = -H/2;
-            }
+            phi[i][j] = 15 * H - sqrtf((i-50)*H*(i-50)*H+(j-50)*H*(j-50)*H);
         }
     }
     
@@ -97,29 +78,33 @@ int main() {
             for (j = 0; j < SIZE; j++) {
                 double u = 0;
                 double v = 0;
-                if (i == 0 || j == 0 || i == SIZE - 1 || j == SIZE - 1) {
-                    double u = 0;
-                    double v = 0;
-                } else {
+                if (i > 0 && j > 0 && i < SIZE - 1 && j < SIZE - 1) {
                     double u = ddy(psi);
                     double v = -ddx(psi);
                 }
 
-                int sgn = sign(phi[i][j]);
+                double sgn = phi[i][j] / sqrtf(phi[i][j] * phi[i][j] + 0.00001);
+                
                 double dx_plus = (phi[i][j+(j<SIZE-1)] - phi[i][j]) / H;
                 double dx_minus = (phi[i][j] - phi[i][j-(j>0)]) / H;
                 double dy_plus = (phi[i+(i<SIZE-1)][j] - phi[i][j]) / H;
                 double dy_minus = (phi[i][j] - phi[i-(i>0)][j]) / H;
+                
+                double dx = dx_plus * (dx_plus * sgn < 0 & (dx_plus + dx_minus) * sgn < 0) + dx_minus * (dx_minus * sgn > 0 & (dx_plus + dx_minus) * sgn > 0);
+                double dy = dy_plus * (dy_plus * sgn < 0 & (dy_plus + dy_minus) * sgn < 0) + dy_minus * (dy_minus * sgn > 0 & (dy_plus + dy_minus) * sgn > 0);
 
-                double dx = dx_minus * (dx_minus * sgn > 0 & dx_plus * sgn > -dx_minus * sgn) + dx_plus * (dx_plus * sgn < 0 | dx_minus * sgn < -dx_plus * sgn);
-                double dy = dy_minus * (dy_minus * sgn > 0 & dy_plus * sgn > -dy_minus * sgn) + dy_plus * (dy_plus * sgn < 0 | dy_minus * sgn < -dy_plus * sgn);
+                // Deal with local maxima/minima
+                if (dx == 0 && dy == 0) {
+                    dx = dx_plus;
+                    dy = dy_plus;
+                }
                 
                 // Artificial timestep from CFL stability criteria
                 double dtau = H / 2;
                 double lambda = dtau / dt;
 
-                // Convected level set
-                phi_new[i][j] = phi[i][j] + ( -u * fx(phi) -v * fy(phi) ) * dt + sign(phi[i][j]) * (1 - sqrtf(dx * dx + dy * dy)) * dt * lambda;
+                // Convect and redistance level set
+                phi_new[i][j] = phi[i][j] + ( -u * fx(phi) -v * fy(phi) ) * dt + sgn * (1 - sqrtf(dx * dx + dy * dy)) * dt * lambda;
             }
         }
         memcpy(phi, phi_new, sizeof(field));
