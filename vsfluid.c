@@ -19,16 +19,12 @@
 #define d2dy2(f) ((f[i+1][j] - 2*f[i][j] + f[i-1][j]) / (H*H))
 
 // First order upwind
-#define fx(f) (sign(u) * (-f[i][j-sign(u)] + f[i][j]) / H)
-#define fy(f) (sign(v) * (-f[i-sign(v)][j] + f[i][j]) / H)
-
-#define sign(x) ((x > 0) - (x < 0))
+#define fx(f) ((u > 0) * (f[i][j] - f[i][j-1]) / H + (u < 0) * (f[i][j+1] - f[i][j]) / H)
+#define fy(f) ((v > 0) * (f[i][j] - f[i-1][j]) / H + (v < 0) * (f[i+1][j] - f[i][j]) / H)
 
 typedef double field[SIZE][SIZE];
 
 int main() {
-    clock_t begin = clock();
-    
     field omega = {0};
     field omega_new = {0};
     field psi = {0};
@@ -117,11 +113,6 @@ int main() {
     FILE *file = fopen("./output", "w");
     fwrite(output, sizeof(double), SIZE * SIZE * N, file);
     fclose(file);
-
-    // Print elapsed time
-    clock_t end = clock();
-    double elapsed_time = (double)(end - begin) / CLOCKS_PER_SEC;
-    printf("Done in %f s\n", elapsed_time);
 
     return 0;
 }

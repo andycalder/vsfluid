@@ -1,3 +1,3 @@
 gcc -Ofast -o vsfluid vsfluid.c
-./vsfluid
+time ./vsfluid
 python3 visualise.py
