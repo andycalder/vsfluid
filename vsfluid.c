@@ -1,90 +1,69 @@
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#include <time.h>
-
-#define N 300
-#define SIZE 100
-#define H 0.02
-#define U 0.0
-#define dt 0.01
-#define nu 0.006
-#define g 0.0
 
 // Central difference derivatives
-#define ddx(f) ((f[i][j+1] - f[i][j-1]) / (2*H))
-#define ddy(f) ((f[i+1][j] - f[i-1][j]) / (2*H))
-#define d2dx2(f) ((f[i][j+1] - 2*f[i][j] + f[i][j-1]) / (H*H))
-#define d2dy2(f) ((f[i+1][j] - 2*f[i][j] + f[i-1][j]) / (H*H))
+#define ddx(f) ((f[i][j+1] - f[i][j-1]) / (2*h))
+#define ddy(f) ((f[i+1][j] - f[i-1][j]) / (2*h))
+#define d2dx2(f) ((f[i][j+1] - 2*f[i][j] + f[i][j-1]) / (h*h))
+#define d2dy2(f) ((f[i+1][j] - 2*f[i][j] + f[i-1][j]) / (h*h))
 
-// First order upwind
-#define fx(f) ((u > 0) * (f[i][j] - f[i][j-1]) / H + (u < 0) * (f[i][j+1] - f[i][j]) / H)
-#define fy(f) ((v > 0) * (f[i][j] - f[i-1][j]) / H + (v < 0) * (f[i+1][j] - f[i][j]) / H)
+typedef double field[100][100];
 
-typedef double field[SIZE][SIZE];
-
-int main() {
+double* solve(field phi, int size, int n, double h, double dt, double nu, double U) {
+    // Allocate working memory and output array
     field omega = {0};
     field omega_new = {0};
     field psi = {0};
     field psi_new = {0};
-    field phi = {0};
     field phi_new = {0};
-
-    double *output = malloc(sizeof(field) * N);
+    double* output = malloc(sizeof(field) * n);
     
-    int n, i, j;
-
-    // Initialise level set
-    for (i = 0; i < SIZE; i++) {
-        for (j = 0; j < SIZE; j++) {
-            phi[i][j] = 15 * H - sqrtf((i-50)*H*(i-50)*H+(j-50)*H*(j-50)*H);
-        }
-    }
-    
-    for (n = 0; n < N; n++) {
+    int i, j, k;
+    for (k = 0; k < n; k++) {
 
         // Set boundaries
-        for (i = 1; i < SIZE - 1; i++) {
-            omega[0][i] = 2.0 * -psi[1][i] / (H*H);
-            omega[SIZE-1][i] = 2.0 * -psi[SIZE-2][i] / (H*H);
-            omega[i][0] = 2.0 * -psi[i][1] / (H*H);
-            omega[i][SIZE-1] = 2.0 * -psi[i][SIZE-2] / (H*H);
+        for (i = 1; i < size - 1; i++) {
+            omega[0][i] = 2.0 * -psi[1][i] / (h*h) + 2 * U / h;
+            omega[size-1][i] = 2.0 * -psi[size-2][i] / (h*h);
+            omega[i][0] = 2.0 * -psi[i][1] / (h*h);
+            omega[i][size-1] = 2.0 * -psi[i][size-2] / (h*h);
         }
 
         // Time step
-        for (i = 1; i < SIZE - 1; i++) {
-            for (j = 1; j < SIZE - 1; j++) {
-                double u = ddy(psi);
-                double v = -ddx(psi);
-
+        for (i = 1; i < size - 1; i++) {
+            for (j = 1; j < size - 1; j++) {
                 // Vorticity transport equation
-                omega_new[i][j] = omega[i][j] + (- u * fx(omega) - v * fy(omega) + nu * (d2dx2(omega) + d2dy2(omega))) * dt;
+                omega_new[i][j] = omega[i][j] + (- ddy(psi) * ddx(omega) + ddx(psi) * ddy(omega) + nu * (d2dx2(omega) + d2dy2(omega))) * dt;
                 
                 // Elliptic equation (one iteration)
-                psi_new[i][j] = 0.25 * (psi[i+1][j] + psi[i-1][j] + psi[i][j+1] + psi[i][j-1] + H * H * omega_new[i][j]);
+                psi_new[i][j] = 0.25 * (psi[i+1][j] + psi[i-1][j] + psi[i][j+1] + psi[i][j-1] + h * h * omega_new[i][j]);
             }
         }
 
         memcpy(omega, omega_new, sizeof(field));
         memcpy(psi, psi_new, sizeof(field));
         
-        for (i = 0; i < SIZE; i++) {
-            for (j = 0; j < SIZE; j++) {
+        // Convect and redistance level set
+        for (i = 0; i < size; i++) {
+            for (j = 0; j < size; j++) {
                 double u = 0;
                 double v = 0;
-                if (i > 0 && j > 0 && i < SIZE - 1 && j < SIZE - 1) {
+                if (i > 0 && j > 0 && i < size - 1 && j < size - 1) {
                     double u = ddy(psi);
                     double v = -ddx(psi);
                 }
+                if (i == 0) {
+                    double u = U;
+                }
 
+                // Smoothed sign function
                 double sgn = phi[i][j] / sqrtf(phi[i][j] * phi[i][j] + 0.00001);
                 
-                double dx_plus = (phi[i][j+(j<SIZE-1)] - phi[i][j]) / H;
-                double dx_minus = (phi[i][j] - phi[i][j-(j>0)]) / H;
-                double dy_plus = (phi[i+(i<SIZE-1)][j] - phi[i][j]) / H;
-                double dy_minus = (phi[i][j] - phi[i-(i>0)][j]) / H;
+                double dx_plus = (phi[i][j+(j<size-1)] - phi[i][j]) / h;
+                double dx_minus = (phi[i][j] - phi[i][j-(j>0)]) / h;
+                double dy_plus = (phi[i+(i<size-1)][j] - phi[i][j]) / h;
+                double dy_minus = (phi[i][j] - phi[i-(i>0)][j]) / h;
                 
                 double dx = dx_plus * (dx_plus * sgn < 0 & (dx_plus + dx_minus) * sgn < 0) + dx_minus * (dx_minus * sgn > 0 & (dx_plus + dx_minus) * sgn > 0);
                 double dy = dy_plus * (dy_plus * sgn < 0 & (dy_plus + dy_minus) * sgn < 0) + dy_minus * (dy_minus * sgn > 0 & (dy_plus + dy_minus) * sgn > 0);
@@ -96,23 +75,18 @@ int main() {
                 }
                 
                 // Artificial timestep from CFL stability criteria
-                double dtau = H / 2;
+                double dtau = h / 2;
                 double lambda = dtau / dt;
 
                 // Convect and redistance level set
-                phi_new[i][j] = phi[i][j] + ( -u * fx(phi) -v * fy(phi) ) * dt + sgn * (1 - sqrtf(dx * dx + dy * dy)) * dt * lambda;
+                phi_new[i][j] = phi[i][j] + ( -u * ddx(phi) -v * ddy(phi) ) * dt;// + sgn * (1 - sqrtf(dx * dx + dy * dy)) * dt * lambda;
             }
         }
         memcpy(phi, phi_new, sizeof(field));
     
         // Copy to correct offset in output buffer
-        memcpy(output + n * SIZE * SIZE, phi, sizeof(field));
+        memcpy(output + k * size * size, psi, sizeof(field));
     }
 
-    // Save to disk
-    FILE *file = fopen("./output", "w");
-    fwrite(output, sizeof(double), SIZE * SIZE * N, file);
-    fclose(file);
-
-    return 0;
+    return output;
 }
