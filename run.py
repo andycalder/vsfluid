@@ -1,4 +1,5 @@
 from ctypes import *
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
@@ -21,7 +22,8 @@ for i in range(size):
         else:
             phi[i,j] = -h/2
 
-#cc -Ofast -fPIC -shared -o vsfluid.so vsfluid.c
+# Compile c code
+os.system('cc -Ofast -fPIC -shared -o vsfluid.so vsfluid.c')
 
 # Set up interface with c library
 c_library = CDLL('./vsfluid.so')
