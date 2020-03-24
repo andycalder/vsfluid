@@ -5,22 +5,18 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 
 # Set simulation parameters
-size = 100
-n = 1000
-h = 0.02
-U = 1.0
-dt = 0.01
-nu = 0.006
-g = 0.01
+size = 100      # Grid size
+n = 1000        # Number of time steps
+h = 0.02        # Grid spacing
+U = 1.0         # Top boundary velocity
+dt = 0.01       # Time step
+nu = 0.003      # Kinematic viscosity
 
 # Set initial fluid volume
 phi = np.zeros((size, size), dtype=np.float64)
 for i in range(size):
     for j in range(size):
-        if j < 50:
-            phi[i,j] = h/2
-        else:
-            phi[i,j] = -h/2
+        phi[i,j] = size / 2 * h - j * h
 
 # Compile c code
 os.system('cc -Ofast -fPIC -shared -o vsfluid.so vsfluid.c')
@@ -39,8 +35,8 @@ data = np.reshape(output.contents, (n, size, size))
 def update(i):
     field = data[i, :, :]
     img.set_data(field)
-    img.set_clim(vmin=field.min(), vmax=field.max())
-    #img.set_clim(vmin=-0.02, vmax=0.02)
+    #img.set_clim(vmin=field.min(), vmax=field.max())
+    img.set_clim(vmin=-0.02, vmax=0.02)
     return img,
 
 # Display animation
